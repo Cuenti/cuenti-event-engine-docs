@@ -1,0 +1,2289 @@
+{
+  "info": {
+    "name": "Cuenti Event Engine · QA y administración (equipo del motor)",
+    "description": "SOLO para el equipo del motor, contra un motor local o de pruebas. Necesita la clave de administrador (adminKey) y prueba la llave de registro y los controles de acceso. Los desarrolladores de sistemas receptores NO usan esta colección: usan «Cuenti Event Engine · integración de sistemas» (cuenti-event-engine-integracion.postman_collection.json) con el environment «Event Engine · prod».\n\nImporta también event-engine-local y rellena adminKey, deliveryUrl y deliveryToken. La carpeta 0 crea la llave de registro y la guarda en registrationKey (dura REGISTRATION_KEY_TTL_MS, 24 h por defecto; crear otra anula la anterior). Orden: 0 → 1 → 2 → 3 → (4 opcional) → 5. Cada ejecución de la carpeta 1 hace 13 llamadas a register/recover (límite de 30 por hora y por IP).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0 · Admin: llave de registro (clave de administrador)",
+      "description": "Requiere la variable adminKey (clave de pass-manager, slug SLUG_ADMIN_API_KEY). /admin solo tiene POST /admin/registration-key y no lee body. Cada intento fallido de clave cuenta para AUTH_RATE_LIMIT_PER_HOUR (429 al pasarse). La llave en claro solo aparece en la respuesta del 201: se guarda en registrationKey.",
+      "item": [
+        {
+          "name": "Sin clave → 401",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/registration-key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "registration-key"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Clave errónea → 401",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/registration-key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "registration-key"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{badAdminKey}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear llave de registro → 201",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/registration-key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "registration-key"
+              ]
+            },
+            "description": "Anula la llave anterior. Guarda registrationKey para la carpeta 1.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminKey}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('devuelve registration_key (rk_) y expires_at', () => { pm.expect(j.registration_key).to.match(/^rk_/); pm.expect(new Date(j.expires_at).getTime()).to.be.above(Date.now()); });",
+                  "pm.collectionVariables.set('registrationKey', j.registration_key);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET no existe → 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/registration-key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "registration-key"
+              ]
+            },
+            "description": "Solo existe POST /admin/registration-key.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminKey}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "/admin/ips ya no existe → 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/ips",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "ips"
+              ]
+            },
+            "description": "El filtro de IP y /admin/ips se eliminaron en la fase 3.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminKey}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1 · Registro y recuperación (sin token; el registro exige la llave de registro)",
+      "description": "El alta verifica la URL de entrega: deliveryUrl debe responder 2xx al ping y NO apuntar a loopback/link-local/IP del motor. Usa un receptor real (p. ej. webhook.site). El nombre y la contraseña se generan solos en cada corrida. Los sistemas creados quedan en Mongo (no hay endpoint para borrarlos).",
+      "item": [
+        {
+          "name": "Registrar sistema",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"{{systemName}}\",\n  \"password\": \"{{systemPassword}}\",\n  \"delivery\": {\n    \"url\": \"{{deliveryUrl}}\",\n    \"token\": \"{{deliveryToken}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString(36);",
+                  "pm.collectionVariables.set('systemName', 'pm-' + suffix);",
+                  "pm.collectionVariables.set('systemPassword', 'Pm-' + suffix + '-' + Math.random().toString(36).slice(2, 12));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('devuelve name y access_token (cev_)', () => { pm.expect(j.name).to.eql(pm.collectionVariables.get('systemName')); pm.expect(j.access_token).to.match(/^cev_/); });",
+                  "pm.collectionVariables.set('accessToken', j.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar mismo nombre → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"{{systemName}}\",\n  \"password\": \"{{systemPassword}}\",\n  \"delivery\": {\n    \"url\": \"{{deliveryUrl}}\",\n    \"token\": \"{{deliveryToken}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin llave de registro → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"pm-sin-llave\",\n  \"password\": \"una-clave-larga-123\",\n  \"delivery\": {\n    \"url\": \"{{deliveryUrl}}\",\n    \"token\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Llave de registro errónea → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"rk_incorrecta\",\n  \"name\": \"pm-llave-mala\",\n  \"password\": \"una-clave-larga-123\",\n  \"delivery\": {\n    \"url\": \"{{deliveryUrl}}\",\n    \"token\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('mensaje', () => pm.expect(pm.response.json().message).to.eql('Llave de registro inválida o vencida'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Contraseña corta → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"pm-corta\",\n  \"password\": \"corta\",\n  \"delivery\": {\n    \"url\": \"{{deliveryUrl}}\",\n    \"token\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nombre inválido → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"Nombre Con Espacios\",\n  \"password\": \"una-clave-larga-123\",\n  \"delivery\": {\n    \"url\": \"{{deliveryUrl}}\",\n    \"token\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Campo extra → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"pm-extra\",\n  \"password\": \"una-clave-larga-123\",\n  \"delivery\": {\n    \"url\": \"{{deliveryUrl}}\",\n    \"token\": \"x\"\n  },\n  \"admin\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "URL a loopback (anti-SSRF) → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"pm-ssrf\",\n  \"password\": \"una-clave-larga-123\",\n  \"delivery\": {\n    \"url\": \"http://127.0.0.1:9/hook\",\n    \"token\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('motivo genérico', () => pm.expect(pm.response.json().motivo).to.eql('La URL de entrega no está permitida'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "URL de metadatos 169.254.169.254 → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"pm-meta\",\n  \"password\": \"una-clave-larga-123\",\n  \"delivery\": {\n    \"url\": \"http://169.254.169.254/latest\",\n    \"token\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "URL IPv6 mapeada a loopback → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"pm-map\",\n  \"password\": \"una-clave-larga-123\",\n  \"delivery\": {\n    \"url\": \"http://[::ffff:7f00:1]/hook\",\n    \"token\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recuperar token (contraseña correcta)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/token/recover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "token",
+                "recover"
+              ]
+            },
+            "description": "Revoca TODOS los tokens anteriores y devuelve uno nuevo.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{systemName}}\",\n  \"password\": \"{{systemPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('token nuevo', () => pm.expect(j.access_token).to.match(/^cev_/));",
+                  "pm.collectionVariables.set('accessToken', j.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recuperar con contraseña errónea → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/token/recover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "token",
+                "recover"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{systemName}}\",\n  \"password\": \"contraseña-incorrecta-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('mensaje genérico', () => pm.expect(pm.response.json().message).to.eql('Credenciales inválidas'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recuperar sistema inexistente → 401 (idéntico)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/token/recover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "token",
+                "recover"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"no-existe-jamas-xyz\",\n  \"password\": \"contraseña-incorrecta-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('mismo mensaje que contraseña errónea', () => pm.expect(pm.response.json().message).to.eql('Credenciales inválidas'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 · Mi sistema (Bearer)",
+      "description": "Usa accessToken (lo deja la carpeta 1). Orden recomendado: correr la carpeta completa.",
+      "item": [
+        {
+          "name": "Sin token → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token con formato inválido → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{badToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver mi sistema",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('sin secretos', () => { pm.expect(JSON.stringify(j)).to.not.include(pm.collectionVariables.get('deliveryToken')); pm.expect(j.delivery.origin).to.be.a('string'); pm.expect(j.tokens).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rotar token de acceso",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/tokens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "tokens"
+              ]
+            },
+            "description": "Crea un segundo token; el anterior sigue valiendo ACCESS_TOKEN_GRACE_MS (24 h por defecto).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('accessTokenNew', j.access_token);",
+                  "pm.test('token nuevo distinto', () => pm.expect(j.access_token).to.not.eql(pm.collectionVariables.get('accessToken')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rotar otra vez (ya hay 2 activos) → 409",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/tokens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "tokens"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El token anterior sigue válido (gracia)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El token nuevo funciona",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar URL de entrega (solo url)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/delivery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "delivery"
+              ]
+            },
+            "description": "Hace ping antes de guardar. 204 si OK.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{deliveryUrl}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar entrega con body vacío → 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/delivery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "delivery"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar URL a loopback → 422",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/delivery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "delivery"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"http://127.0.0.1:9/hook\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Campo no permitido (system) → 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/delivery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "delivery"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"system\": \"otro\",\n  \"url\": \"{{deliveryUrl}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 · Suscripciones /eventos (Bearer)",
+      "description": "El sistema sale SIEMPRE del token: un body con \"system\" o \"delivery\" responde 400. POST /eventos publica el cambio en RabbitMQ.",
+      "item": [
+        {
+          "name": "Sin token → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activar un evento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('registro del sistema del token', () => { pm.expect(j.system).to.eql(pm.collectionVariables.get('systemName')); pm.expect(j.es_activo).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activar varios eventos (bulk)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"eventos\": [\n    \"{{evento}}\",\n    \"{{evento}}.b\",\n    \"{{evento}}.c\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('resultados', () => pm.expect(pm.response.json().resultados).to.have.length(3));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Body con \"system\" → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\",\n  \"system\": \"otro-sistema\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Body con \"delivery\" → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\",\n  \"delivery\": {\n    \"url\": \"http://x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin evento ni eventos → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "id_empresa inválido → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": 0,\n  \"evento\": \"{{evento}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar mis suscripciones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json().suscripciones;",
+                  "pm.test('solo mi sistema y sin campos internos', () => { pm.expect(s).to.be.an('array'); s.forEach(x => { pm.expect(x.system).to.eql(pm.collectionVariables.get('systemName')); pm.expect(x).to.not.have.property('_id'); }); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar por empresa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ],
+              "query": [
+                {
+                  "key": "id_empresa",
+                  "value": "{{idEmpresa}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar con id_empresa inválido → 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ],
+              "query": [
+                {
+                  "key": "id_empresa",
+                  "value": "abc"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Desactivar un evento",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos",
+                "estado"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\",\n  \"es_activo\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('queda inactivo', () => pm.expect(pm.response.json().es_activo).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reactivar un evento",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos",
+                "estado"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\",\n  \"es_activo\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estado de suscripción inexistente → 404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos",
+                "estado"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"evento.que.no.existe\",\n  \"es_activo\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH sin es_activo → 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos",
+                "estado"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenNew}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 · Aislamiento entre sistemas (opcional, requiere un segundo sistema)",
+      "description": "Registra un segundo sistema (carpeta 1 otra vez con otro nombre) y pon su token en accessTokenOther. Un token jamás ve ni modifica suscripciones de otro sistema.",
+      "item": [
+        {
+          "name": "El otro sistema no ve mis suscripciones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ],
+              "query": [
+                {
+                  "key": "id_empresa",
+                  "value": "{{idEmpresa}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenOther}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ninguna es del primer sistema', () => pm.response.json().suscripciones.forEach(s => pm.expect(s.system).to.not.eql(pm.collectionVariables.get('systemName'))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El otro sistema no puede desactivar la mía → 404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos",
+                "estado"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenOther}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\",\n  \"es_activo\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5 · Controles de acceso (sin filtro de IP)",
+      "description": "El motor ya no filtra por IP: las rutas responden según su propia autenticación. Estas peticiones comprueban que ninguna devuelve 403 \"IP no autorizada\" y que las cabeceras falsificadas no cambian el resultado.",
+      "item": [
+        {
+          "name": "Ruta inexistente → 404 (no 403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ruta-que-no-existe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ruta-que-no-existe"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cabeceras X-Real-IP / X-Forwarded-For falsificadas → 401 (sin token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Real-IP",
+                "value": "198.51.100.9"
+              },
+              {
+                "key": "X-Forwarded-For",
+                "value": "198.51.100.9"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "description": "Las cabeceras solo afectan al rate limit (la IP se resuelve con EVENT_CONFIG_TRUST_PROXY_HOPS); no abren ni cierran el acceso.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('no es 403 por IP', () => pm.expect(pm.response.json().message).to.not.eql('IP no autorizada'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preflight CORS",
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "https://ejemplo.test"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "POST"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3008",
+      "type": "string"
+    },
+    {
+      "key": "adminKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "badAdminKey",
+      "value": "clave-incorrecta",
+      "type": "string"
+    },
+    {
+      "key": "badToken",
+      "value": "cev_incorrecto",
+      "type": "string"
+    },
+    {
+      "key": "deliveryUrl",
+      "value": "https://webhook.site/REEMPLAZA-POR-TU-ID",
+      "type": "string"
+    },
+    {
+      "key": "deliveryToken",
+      "value": "token-de-entrega-de-prueba",
+      "type": "string"
+    },
+    {
+      "key": "idEmpresa",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "evento",
+      "value": "postman.evento",
+      "type": "string"
+    },
+    {
+      "key": "systemName",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "systemPassword",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessTokenNew",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessTokenOther",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "registrationKey",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

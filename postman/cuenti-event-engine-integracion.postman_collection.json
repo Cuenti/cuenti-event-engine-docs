@@ -1,0 +1,895 @@
+{
+  "info": {
+    "name": "Cuenti Event Engine · integración de sistemas",
+    "description": "Para el dev de un sistema que recibe eventos por webhook.\n\nFlujo: (1) levantá tu receptor o un túnel público; (2) importá esta colección y el environment `Event Engine · prod`; (3) completá en el environment baseUrl (te la da el administrador), registrationKey (la llave de registro que te da el administrador), systemName, systemPassword (12-128 caracteres), deliveryUrl (URL pública https de tu receptor/túnel), deliveryToken, idEmpresa, evento y evento2; (4) ejecutá en orden 1 → 2.1 → 4.1. Después provocá el evento en el ERP y mirá la petición llegar a tu túnel.\n\nPara registrarte necesitás una llave de registro (`rk_…`) que crea el administrador; dura 24 horas por defecto. Si es inválida o venció, `register` responde 401 «Llave de registro inválida o vencida».\n\nGuía completa: docs/guia-desarrollador.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 · Antes de registrar: probá tu receptor",
+      "description": "Estas peticiones salen desde Postman (no desde el motor) hacia TU receptor o túnel, para comprobar que responde como el motor espera ANTES de registrarte. El ping real sale desde el motor, así que el receptor tiene que ser alcanzable desde internet (túnel o despliegue).",
+      "item": [
+        {
+          "name": "1.1 Ping de prueba a mi receptor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{deliveryToken}}"
+              },
+              {
+                "key": "X-Delivery-Type",
+                "value": "ping"
+              },
+              {
+                "key": "X-Contract-Version",
+                "value": "1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{deliveryUrl}}"
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Replica el ping del motor: POST con `X-Delivery-Type: ping`, `X-Contract-Version: 1`, `Authorization: Bearer <deliveryToken>` y body `{}`. Tiene que responder 2xx y sin redirigir.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('deliveryUrl', 'deliveryToken');",
+                  "if (pm.environment.get('deliveryUrl').includes('TU-TUNEL')) throw new Error('Reemplazá deliveryUrl por la URL pública de tu túnel o receptor.');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('el receptor responde 2xx al ping (sin redirigir)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "1.2 Evento de ejemplo a mi receptor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{deliveryToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "TEST:erp:{{idEmpresa}}:1:{{systemName}}"
+              },
+              {
+                "key": "X-Event-Id",
+                "value": "1"
+              },
+              {
+                "key": "X-Delivery-Attempt",
+                "value": "1"
+              },
+              {
+                "key": "X-Delivery-Type",
+                "value": "event"
+              },
+              {
+                "key": "X-Contract-Version",
+                "value": "1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{deliveryUrl}}"
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Replica una entrega de evento. Ejecutala dos veces: la segunda tiene que responder 2xx sin repetir el efecto (idempotencia por `Idempotency-Key`).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_company\": {{idEmpresa}},\n  \"id_branch\": 0,\n  \"event\": {\n    \"type\": \"{{evento}}\",\n    \"data\": { \"ref\": 1 }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('deliveryUrl', 'deliveryToken', 'idEmpresa', 'evento', 'systemName');",
+                  "if (pm.environment.get('deliveryUrl').includes('TU-TUNEL')) throw new Error('Reemplazá deliveryUrl por la URL pública de tu túnel o receptor.');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('el receptor responde 2xx al evento', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 · Registro y acceso",
+      "description": "Se hace una sola vez por sistema. El nombre y la contraseña los elegís vos en el environment (`systemName`, `systemPassword`). El `access_token` se guarda solo en el environment.",
+      "item": [
+        {
+          "name": "2.1 Registrar mi sistema",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "El motor verifica la llave de registro (`registrationKey`, te la da el administrador) y hace un ping a `deliveryUrl` antes de crear el sistema: tu receptor/túnel tiene que estar encendido y responder 2xx. Devuelve `access_token` UNA sola vez (se guarda en `accessToken`). Cuenta contra el límite de 30 llamadas por hora y por IP de register/recover.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registration_key\": \"{{registrationKey}}\",\n \"name\": \"{{systemName}}\",\n  \"password\": \"{{systemPassword}}\",\n  \"delivery\": {\n    \"url\": \"{{deliveryUrl}}\",\n    \"token\": \"{{deliveryToken}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('registrationKey', 'systemName', 'systemPassword', 'deliveryUrl', 'deliveryToken');",
+                  "if (pm.environment.get('deliveryUrl').includes('TU-TUNEL')) throw new Error('Reemplazá deliveryUrl por la URL pública de tu túnel o receptor.');",
+                  "if (pm.environment.get('systemPassword').length < 12) throw new Error('systemPassword debe tener entre 12 y 128 caracteres.');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  pm.test('devuelve name y access_token (cev_…)', () => { pm.expect(j.name).to.eql(pm.environment.get('systemName')); pm.expect(j.access_token).to.match(/^cev_/); });",
+                  "  pm.environment.set('accessToken', j.access_token);",
+                  "} else { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.2 Recuperar acceso (perdí o se filtró el token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/token/recover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "token",
+                "recover"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Con el nombre y la contraseña. REVOCA todos los tokens de acceso anteriores y devuelve uno nuevo (se guarda en `accessToken`).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{systemName}}\",\n  \"password\": \"{{systemPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('systemName', 'systemPassword');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) { const j = pm.response.json(); pm.test('token nuevo (cev_…)', () => pm.expect(j.access_token).to.match(/^cev_/)); pm.environment.set('accessToken', j.access_token); } else { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 · Mi sistema (token de acceso)",
+      "description": "Todas usan `Authorization: Bearer {{accessToken}}`.",
+      "item": [
+        {
+          "name": "3.1 Ver mi sistema",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Muestra nombre, estado, origen de la URL de entrega y prefijos de tus tokens. Nunca devuelve secretos."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if (pm.response.code === 200) { const j = pm.response.json(); pm.test('muestra mi sistema sin secretos', () => { pm.expect(j.name).to.eql(pm.environment.get('systemName')); pm.expect(j.delivery.origin).to.be.a('string'); pm.expect(j.tokens).to.be.an('array'); pm.expect(JSON.stringify(j)).to.not.include(pm.environment.get('deliveryToken')); }); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.2 Cambiar la URL de entrega (p. ej. túnel nuevo)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/delivery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "delivery"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Actualizá `deliveryUrl` en el environment y ejecutá esto. El motor hace ping a la URL nueva antes de guardarla (tiene que estar encendida). Si cambia tu túnel cada vez que lo reiniciás, es lo primero que tenés que correr.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{deliveryUrl}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken', 'deliveryUrl');",
+                  "if (pm.environment.get('deliveryUrl').includes('TU-TUNEL')) throw new Error('Reemplazá deliveryUrl por la URL pública de tu túnel o receptor.');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if (![204, 401].includes(pm.response.code)) console.log(pm.response.text());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.3 Cambiar el token de entrega",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/delivery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "delivery"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Cambiá `deliveryToken` en el environment (y en tu receptor) y ejecutá esto. El motor hace ping con el token nuevo antes de guardarlo: tu receptor tiene que aceptarlo ya. Para rotar sin corte, hacé que tu receptor acepte el token viejo y el nuevo, ejecutá esto y después retirá el viejo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{deliveryToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken', 'deliveryToken');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if (![204, 401].includes(pm.response.code)) console.log(pm.response.text());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.4 Rotar el token de acceso",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/systems/me/tokens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "systems",
+                "me",
+                "tokens"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Crea un segundo token de acceso. El anterior sigue valiendo un período de gracia (24 h por defecto). Con dos tokens activos no podés rotar otra vez (409). El nuevo pasa a `accessToken` y el anterior queda en `accessTokenPrevious`."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if (pm.response.code === 201) { const j = pm.response.json(); pm.test('token nuevo distinto', () => pm.expect(j.access_token).to.not.eql(pm.environment.get('accessToken'))); pm.environment.set('accessTokenPrevious', pm.environment.get('accessToken')); pm.environment.set('accessToken', j.access_token); } else if (pm.response.code === 409) { console.log('Ya hay dos tokens activos: esperá a que venza el anterior o usá Recuperar acceso (2.2).'); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 · Eventos (suscripciones)",
+      "description": "Por empresa (`idEmpresa`) y tipo de evento (`evento`). Completalos en el environment con valores reales; los tipos de evento válidos te los da el administrador del motor.",
+      "item": [
+        {
+          "name": "4.1 Activar un evento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Activa (o crea) la suscripción de tu sistema a un evento de una empresa. Es idempotente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken', 'idEmpresa', 'evento');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if (pm.response.code === 200) { const j = pm.response.json(); pm.test('suscripción activa de mi sistema', () => { pm.expect(j.system).to.eql(pm.environment.get('systemName')); pm.expect(j.es_activo).to.eql(true); }); } else { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.2 Activar varios eventos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Varios eventos de una empresa en una sola llamada. Responde 200 si todos salen bien o 207 si alguno falla; revisá `resultados`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"eventos\": [\n    \"{{evento}}\",\n    \"{{evento2}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken', 'idEmpresa', 'evento', 'evento2');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 o 207', () => pm.expect(pm.response.code).to.be.within(200, 207));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if ([200, 207].includes(pm.response.code)) pm.test('un resultado por evento', () => pm.expect(pm.response.json().resultados).to.have.length(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.3 Listar mis suscripciones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/eventos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Todas las suscripciones de tu sistema (activas o no)."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if (pm.response.code === 200) pm.test('solo mi sistema', () => { const s = pm.response.json().suscripciones; pm.expect(s).to.be.an('array'); s.forEach((x) => pm.expect(x.system).to.eql(pm.environment.get('systemName'))); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.4 Listar mis suscripciones de una empresa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/eventos?id_empresa={{idEmpresa}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos"
+              ],
+              "query": [
+                {
+                  "key": "id_empresa",
+                  "value": "{{idEmpresa}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Filtra por `id_empresa` (entero positivo)."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken', 'idEmpresa');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.5 Desactivar un evento",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos",
+                "estado"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Deja de recibir ese evento para esa empresa. La suscripción se conserva.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\",\n  \"es_activo\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken', 'idEmpresa', 'evento');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if (pm.response.code === 200) pm.test('queda inactiva', () => pm.expect(pm.response.json().es_activo).to.eql(false)); else console.log(pm.response.text());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.6 Reactivar un evento",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eventos/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eventos",
+                "estado"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Vuelve a recibir el evento.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_empresa\": \"{{idEmpresa}}\",\n  \"evento\": \"{{evento}}\",\n  \"es_activo\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const need = (...names) => {\n  const missing = names.filter((n) => !String(pm.environment.get(n) ?? '').trim());\n  if (missing.length) throw new Error('Completá en el environment: ' + missing.join(', '));\n};",
+                  "need('accessToken', 'idEmpresa', 'evento');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 401) console.log('Token inválido: ejecutá \"Recuperar acceso\" (2.2) para obtener uno nuevo.');",
+                  "if (pm.response.code === 200) pm.test('queda activa', () => pm.expect(pm.response.json().es_activo).to.eql(true)); else console.log(pm.response.text());"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
